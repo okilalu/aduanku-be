@@ -1,0 +1,323 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+/* =========================================================
+   ENUMS
+   ========================================================= */
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum CaseStatus {
+  PENDING_REVIEW
+  VERIFIED
+  IN_PROGRESS
+  ASSISTANCE
+  FOLLOW_UP
+  COMPLETED
+  REJECTED
+}
+
+enum ViolenceType {
+  PHYSICAL
+  PSYCHOLOGICAL
+  SEXUAL
+  DOMESTIC
+  CHILD
+  GENDER_BASED
+  OTHER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum AttachmentType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  OTHER
+}
+
+enum InformationStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum InformationCategory {
+  EDUCATION
+  VICTIM_RIGHTS
+  PREVENTION
+  ASSISTANCE
+  SERVICES
+  OTHER
+}
+
+enum AspirationStatus {
+  SUBMITTED
+  REVIEWED
+  FOLLOWED_UP
+}
+
+enum AspirationType {
+  EDUCATION
+  TRAINING
+  VOLUNTEER
+  PARALEGAL
+  CAMPAIGN
+  SOCIALIZATION
+  COMMUNITY
+  FEEDBACK
+  OTHER
+}
+
+
+/* =========================================================
+   USER
+   ========================================================= */
+
+model User {
+  id            String     @id @default(uuid()) @db.Uuid
+  name          String
+  email         String     @unique
+  phone         String?
+  passwordHash  String     @map("password_hash")
+  role          UserRole   @default(USER)
+  status        UserStatus @default(ACTIVE)
+
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  cases         Case[]
+  aspirations   Aspiration[]
+
+  statusHistory CaseStatusHistory[] @relation("StatusUpdatedBy")
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+
+/* =========================================================
+   CASE
+   ========================================================= */
+
+model Case {
+  id                String       @id @default(uuid()) @db.Uuid
+  caseNumber        String       @unique @map("case_number")
+
+  reporterId        String       @map("reporter_id") @db.Uuid
+  reporter          User         @relation(fields: [reporterId], references: [id])
+
+  violenceType      ViolenceType @map("violence_type")
+  title             String
+  description       String
+
+  incidentDate      DateTime?    @map("incident_date")
+  incidentLocation  String?      @map("incident_location")
+
+  status            CaseStatus   @default(PENDING_REVIEW)
+
+  rejectionReason   String?      @map("rejection_reason")
+
+  closedAt          DateTime?    @map("closed_at")
+
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  victim            Victim[]
+  perpetrator       Perpetrator[]
+  aspiration        Aspiration[]
+
+  attachments       CaseAttachment[]
+  statusHistory     CaseStatusHistory[]
+
+  @@index([reporterId])
+  @@index([status])
+  @@index([violenceType])
+  @@index([createdAt])
+  @@map("cases")
+}
+
+
+/* =========================================================
+   VICTIM
+   ========================================================= */
+
+model Victim {
+  id              String    @id @default(uuid()) @db.Uuid
+
+  caseId          String    @map("case_id") @db.Uuid
+  case            Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  name            String?
+  age             Int?
+  gender          Gender?
+
+  relationship    String?
+
+  additionalInfo  String?   @map("additional_info")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("case_victims")
+}
+
+
+/* =========================================================
+   PERPETRATOR
+   ========================================================= */
+
+model Perpetrator {
+  id              String    @id @default(uuid()) @db.Uuid
+
+  caseId          String    @map("case_id") @db.Uuid
+  case            Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  isKnown         Boolean   @default(false) @map("is_known")
+
+  name            String?
+
+  relationship    String?
+
+  additionalInfo  String?   @map("additional_info")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("case_perpetrators")
+}
+
+
+/* =========================================================
+   CASE ATTACHMENT
+   ========================================================= */
+
+model CaseAttachment {
+  id            String         @id @default(uuid()) @db.Uuid
+
+  caseId        String         @map("case_id") @db.Uuid
+  case          Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  type          AttachmentType
+
+  fileName      String         @map("file_name")
+  filePath      String         @map("file_path")
+  fileSize      BigInt?        @map("file_size")
+  mimeType      String?        @map("mime_type")
+
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_attachments")
+}
+
+
+/* =========================================================
+   CASE STATUS HISTORY
+   ========================================================= */
+
+model CaseStatusHistory {
+  id            String     @id @default(uuid()) @db.Uuid
+
+  caseId        String     @map("case_id") @db.Uuid
+  case          Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  status        CaseStatus
+
+  note          String?
+
+  updatedById   String     @map("updated_by_id") @db.Uuid
+  updatedBy     User       @relation("StatusUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  @@index([caseId])
+  @@index([updatedById])
+  @@index([createdAt])
+  @@map("case_status_histories")
+}
+
+
+/* =========================================================
+   INFORMATION
+   ========================================================= */
+
+model Information {
+  id            String               @id @default(uuid()) @db.Uuid
+
+  title         String
+  slug          String               @unique
+
+  category      InformationCategory
+  content       String
+
+  thumbnailUrl  String?              @map("thumbnail_url")
+
+  status        InformationStatus    @default(DRAFT)
+
+  publishedAt   DateTime?            @map("published_at")
+
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([status])
+  @@index([publishedAt])
+  @@map("information")
+}
+
+
+/* =========================================================
+   ASPIRATION
+   ========================================================= */
+
+model Aspiration {
+  id            String           @id @default(uuid()) @db.Uuid
+
+  userId        String           @map("user_id") @db.Uuid
+  user          User             @relation(fields: [userId], references: [id])
+
+  caseId        String?          @unique @map("case_id") @db.Uuid
+  case          Case?            @relation(fields: [caseId], references: [id])
+
+  type          AspirationType
+
+  message       String?
+
+  status        AspirationStatus @default(SUBMITTED)
+
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([caseId])
+  @@index([type])
+  @@index([status])
+  @@map("aspirations")
+}
