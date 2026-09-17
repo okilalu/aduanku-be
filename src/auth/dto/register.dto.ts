@@ -5,10 +5,10 @@ export class RegisterDto {
   @IsNotEmpty()
   name: string;
 
-  @IsEmail()
+  @IsEmail({}, { message: 'invalid email format' })
   email: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(8, { message: 'password must be at least 8 characters long' })
   password: string;
 }
